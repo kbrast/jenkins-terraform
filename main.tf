@@ -1,30 +1,39 @@
+# Create a new EC2 instance
 resource "aws_instance" "jenkins" {
   ami           = var.ami_id
   instance_type = var.instance_type
 
+  # Bootstrap the instance with a script that installs and starts Jenkins
   user_data = <<-EOF
               #!/bin/bash
               sudo yum update -y
-              sudo yum install java-1.8.0-openjdk -y
-              wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat-stable/jenkins.repo
-              rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
-              sudo yum install jenkins -y
-              sudo service jenkins start
+              sudo yum install -y java-1.8.0-openjdk-devel
+              sudo wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat-stable/jenkins.repo
+              sudo rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
+              sudo yum install -y jenkins
+              sudo systemctl start jenkins
+              sudo systemctl enable jenkins
               EOF
 
+  # Create and assign a security group to the Jenkins EC2 instance
+  vpc_security_group_ids = [aws_security_group.jenkins.id]
+
+  # Add tags to the EC2 instance
   tags = {
-    Name = "jenkins-server"
+    Name = "Jenkins"
   }
 }
 
-resource "aws_security_group" "jenkins-sg" {
-  name_prefix = "jenkins-sg-"
-  
+# Create a new security group for the Jenkins EC2 instance
+resource "aws_security_group" "jenkins" {
+  name_prefix = "jenkins"
+  vpc_id      = data.aws_vpc.default.id
+
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["${var.my_ip}/32"]
+    cidr_blocks = ["70.112.69.45/32"]
   }
 
   ingress {
@@ -40,17 +49,22 @@ resource "aws_security_group" "jenkins-sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = {
-    Name = "jenkins-sg"
-  }
 }
 
-resource "aws_s3_bucket" "jenkins-artifacts" {
-  bucket = "jenkins-artifacts-${random_id.random.hex}"
-  acl    = "private"
+# Create a new S3 bucket for Jenkins artifacts
+resource "aws_s3_bucket" "jenkins" {
+  bucket = var.jenkins_s3_bucket_name
 
-  tags = {
-    Name = "jenkins-artifacts"
-  }
+  # Deny public access to the S3 bucket
+  acl = "private"
+}
+
+# Output the Jenkins server URL
+output "jenkins_url" {
+  value = "http://${aws_instance.jenkins.public_ip}:8080/"
+}
+
+# Retrieve the default VPC ID
+data "aws_vpc" "default" {
+  default = true
 }
