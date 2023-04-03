@@ -11,7 +11,7 @@ variable "instance_type" {
 }
 
 variable "ssh_key_name" {
-  default = "KWBkey"
+  default = "Your_SSH_Key_Name"
 }
 
 variable "jenkins_s3_bucket_name" {
