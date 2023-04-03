@@ -1,51 +1,73 @@
-provider "aws" {
-  region = "us-east-1"
+# Create a new EC2 instance
+resource "aws_instance" "jenkins" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+
+  # Bootstrap the instance with a script that installs and starts Jenkins
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo yum update -y
+              sudo yum install -y java-1.8.0-openjdk-devel
+              sudo wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat-stable/jenkins.repo
+              sudo rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
+              sudo yum install -y jenkins
+              sudo systemctl start jenkins
+              sudo systemctl enable jenkins
+              EOF
+
+  # Create and assign a security group to the Jenkins EC2 instance
+  vpc_security_group_ids = [aws_security_group.jenkins.id]
+
+  # Add tags to the EC2 instance
+  tags = {
+    Name = "Jenkins"
+  }
 }
 
-resource "aws_default_vpc" "default" {}
-
+# Create a new security group for the Jenkins EC2 instance
 resource "aws_security_group" "jenkins" {
-  name_prefix = "jenkins-sg-"
+  name_prefix = "jenkins"
+  vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    from_port = 22
-    to_port = 22
-    protocol = "tcp"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
     cidr_blocks = ["70.112.69.45/32"]
   }
 
   ingress {
-    from_port = 8080
-    to_port = 8080
-    protocol = "tcp"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  vpc_id = aws_default_vpc.default.id
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
-resource "aws_instance" "jenkins" {
-  ami = "ami-0c94855ba95c71c99"
-  instance_type = "t2.micro"
-  security_groups = [aws_security_group.jenkins.id]
-  key_name = "KWBkey" 
-
-  user_data = <<-EOF
-              #!/bin/bash
-              sudo apt-get update -y
-              sudo apt-get install -y openjdk-8-jdk
-              wget -q -O - https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo apt-key add -
-              sudo sh -c 'echo deb https://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'
-              sudo apt-get update -y
-              sudo apt-get install -y jenkins
-              EOF
+# Create a new S3 bucket for Jenkins artifacts
+resource "aws_s3_bucket" "jenkins" {
+  bucket = var.jenkins_s3_bucket_name
 }
 
-resource "aws_s3_bucket" "jenkins_artifacts" {
-  bucket = "jenkins-artifacts-${random_id.random.hex}"
-  acl = "private"
+# Deny public access to the S3 bucket
+resource "aws_s3_bucket_acl" "jenkins" {
+  bucket = aws_s3_bucket.jenkins.id
+  acl    = "private"
 }
 
-resource "random_id" "random" {
-  byte_length = 4
+# Output the Jenkins server URL
+output "jenkins_url" {
+  value = "http://${aws_instance.jenkins.public_ip}:8080/"
+}
+
+# Retrieve the default VPC ID
+data "aws_vpc" "default" {
+  default = true
 }

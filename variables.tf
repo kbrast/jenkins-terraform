@@ -3,7 +3,7 @@ variable "region" {
 }
 
 variable "ami_id" {
-  default = "ami-09e67e426f25ce0d7" # Amazon Linux 2 AMI
+  default = "ami-04581fbf744a7d11f" # Amazon Linux 2 AMI
 }
 
 variable "instance_type" {
@@ -15,5 +15,5 @@ variable "ssh_key_name" {
 }
 
 variable "jenkins_s3_bucket_name" {
-  default = "terraform-jenkins-bucket-04022023"
+  default = "your-jenkins-bucket-name-040223a"
 }
